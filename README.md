@@ -18,3 +18,6 @@ Lossless AAC splitter for dual mono ATDS
 * makeを実行
 
 以上
+
+## License
+libfaad2をスタティックリンクしているので、[GPL v2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)とする。
