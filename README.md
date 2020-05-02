@@ -1,7 +1,7 @@
 # aacdmsplit
-Lossless AAC splitter for dual mono ATDS
+Lossless AAC splitter for dual mono ADTS
 ## What is this?
-デュアルモノAAC ATDSファイルを二つのモノラルAACファイルに無劣化(再エンコード無し)で分離するツール。
+デュアルモノAAC ADTSファイルを二つのモノラルAACファイルに無劣化(再エンコード無し)で分離するツール。
 
 ## How to use
 ```aacdmsplit <file name>```
@@ -23,4 +23,6 @@ Lossless AAC splitter for dual mono ATDS
 libfaad2をスタティックリンクしているので、[GPL v2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)とする。
 
 ## Special thanks
-[Amatsukaze](https://github.com/nekopanda/Amatsukaze)のソースを参考にさせて頂いた。
+デュアルモノのSCEの切り出しについては、[Amatsukaze](https://github.com/nekopanda/Amatsukaze)のソースを参考にさせて頂いた。
+
+AACファイルの読み込みについては、aaceditのソースを参考にさせて頂いた。

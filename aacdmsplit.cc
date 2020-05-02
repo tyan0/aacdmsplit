@@ -223,6 +223,13 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 		}
 		NeAACDecFrameInfo frameInfo;
 		NeAACDecDecode(hAacDec, &frameInfo, p, aac_frame_length);
+		if (frameInfo.error) {
+			/* –³‰¹ƒtƒŒ[ƒ€‚Å‘ã‘Ö */
+			reset_bitstream();
+			int len = adts_frame_silent(p) >> 3;
+			NeAACDecDecode(hAacDec, &frameInfo, bitstream.buf, len);
+			p = bitstream.buf;
+		}
 		int protection_absent = bitstoint(p, 15, 1);
 		for (int i=0; i<2; i++) {
 			if (channels != 0 || frameInfo.fr_ch_ele !=2) {
