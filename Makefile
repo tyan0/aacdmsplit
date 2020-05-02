@@ -13,7 +13,7 @@ aacdmsplit: aacdmsplit.cc aacdmsplit.h
 clean:
 	rm -rf aacdmsplit
 
-aacdmsplit.tgz: aacdmsplit.h aacdmsplit.cc faad2.patch Makefile aacdmsplit.exe
+aacdmsplit.tar.gz: aacdmsplit.h aacdmsplit.cc faad2.patch Makefile aacdmsplit.exe
 	tar czvf $@ $^
 
-archive: aacdmsplit.tgz
+archive: aacdmsplit.tar.gz
