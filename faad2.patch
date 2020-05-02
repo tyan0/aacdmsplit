@@ -1,0 +1,93 @@
+diff -u a/include/neaacdec.h b/include/neaacdec.h
+--- a/include/neaacdec.h	2020-05-01 00:21:56.858475200 +0900
++++ b/include/neaacdec.h	2020-05-01 00:54:24.946682600 +0900
+@@ -192,6 +192,14 @@
+     unsigned char num_lfe_channels;
+     unsigned char channel_position[64];
+ 
++    /* ARIB拡張を正しく認識するために拡張 */
++    unsigned char fr_ch_ele;
++    unsigned char element_id[64];
++
++    /* チャンネル分離のための拡張 */
++    int element_start[64];
++    int element_end[64];
++
+     /* PS: 0: off, 1: on */
+     unsigned char ps;
+ } NeAACDecFrameInfo;
+diff -u a/libfaad/bits.h b/libfaad/bits.h
+--- a/libfaad/bits.h	2020-05-01 00:33:39.199925800 +0900
++++ b/libfaad/bits.h	2020-05-01 00:33:59.799417800 +0900
+@@ -207,6 +207,12 @@
+     return r;
+ }
+ 
++static INLINE int faad_getpos(bitfile *ld)
++{
++    int bytepos = (int)(ld->tail - (uint32_t*)ld->buffer - 2) * 4;
++    return bytepos * 8 + (32 - ld->bits_left);
++}
++
+ /* reversed bitreading routines */
+ static INLINE uint32_t faad_showbits_rev(bitfile *ld, uint32_t bits)
+ {
+diff -u a/libfaad/decoder.c b/libfaad/decoder.c
+--- a/libfaad/decoder.c	2020-05-01 00:19:45.203086300 +0900
++++ b/libfaad/decoder.c	2020-05-01 00:21:35.276087400 +0900
+@@ -598,6 +598,15 @@
+ 
+ static void create_channel_config(NeAACDecStruct *hDecoder, NeAACDecFrameInfo *hInfo)
+ {
++    /* ARIB拡張を正しく認識するために拡張 */
++    hInfo->fr_ch_ele = hDecoder->fr_ch_ele;
++    for (int i = 0; i < hDecoder->fr_ch_ele; ++i) {
++        hInfo->element_id[i] = hDecoder->element_id[i];
++        /* チャンネル分離のための拡張 */
++        hInfo->element_start[i] = hDecoder->element_start[i];
++        hInfo->element_end[i] = hDecoder->element_end[i];
++    }
++
+     hInfo->num_front_channels = 0;
+     hInfo->num_side_channels = 0;
+     hInfo->num_back_channels = 0;
+diff -u a/libfaad/structs.h b/libfaad/structs.h
+--- a/libfaad/structs.h	2020-05-01 00:25:30.990982400 +0900
++++ b/libfaad/structs.h	2020-05-01 00:26:17.331933800 +0900
+@@ -423,6 +423,9 @@
+     uint8_t element_id[MAX_CHANNELS];
+     uint8_t internal_channel[MAX_CHANNELS];
+ 
++    int element_start[MAX_CHANNELS];
++    int element_end[MAX_CHANNELS];
++
+     /* Configuration data */
+     NeAACDecConfiguration config;
+ 
+diff -u a/libfaad/syntax.c b/libfaad/syntax.c
+--- a/libfaad/syntax.c	2020-05-01 00:27:46.098418900 +0900
++++ b/libfaad/syntax.c	2020-05-01 00:33:06.173553500 +0900
+@@ -346,9 +346,11 @@
+ 
+     /* save the syntax element id */
+     hDecoder->element_id[hDecoder->fr_ch_ele] = id_syn_ele;
++    hDecoder->element_start[hDecoder->fr_ch_ele] = faad_getpos(ld) - 3;
+ 
+     /* decode the element */
+     hInfo->error = single_lfe_channel_element(hDecoder, ld, channels, &tag);
++    hDecoder->element_end[hDecoder->fr_ch_ele] = faad_getpos(ld);
+ 
+     /* map output channels position to internal data channels */
+     if (hDecoder->element_output_channels[hDecoder->fr_ch_ele] == 2)
+@@ -397,9 +399,11 @@
+ 
+     /* save the syntax element id */
+     hDecoder->element_id[hDecoder->fr_ch_ele] = id_syn_ele;
++    hDecoder->element_start[hDecoder->fr_ch_ele] = faad_getpos(ld) - 3;
+ 
+     /* decode the element */
+     hInfo->error = channel_pair_element(hDecoder, ld, channels, &tag);
++    hDecoder->element_end[hDecoder->fr_ch_ele] = faad_getpos(ld);
+ 
+     /* map output channel position to internal data channels */
+     if (hDecoder->pce_set)
