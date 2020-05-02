@@ -6,7 +6,7 @@ Lossless AAC splitter for dual mono ADTS
 ## How to use
 ```aacdmsplit <file name>```
 
-元ファイルと同じディレクトリに、元のファイル名に" SCE#0"と" SCE#1"を付加した2つのファイルが出来上がる。
+元ファイルと同じディレクトリに、元のファイル名に" SCE#0"と" SCE#1"を付加した2つのファイルが出来上がります。
 
 ## How to buid
 作者はcygwinのmingwコンパイラを使用してビルドしています。
@@ -21,9 +21,9 @@ Lossless AAC splitter for dual mono ADTS
 以上
 
 ## License
-libfaad2をスタティックリンクしているので、[GPL v2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)とする。
+libfaad2をスタティックリンクしているので、[GPL v2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)とします。
 
 ## Special thanks
-デュアルモノのSCEの切り出しについては、[Amatsukaze](https://github.com/nekopanda/Amatsukaze)のソースを参考にさせて頂いた。
+デュアルモノのSCEの切り出しについては、[Amatsukaze](https://github.com/nekopanda/Amatsukaze)のソースを参考にさせて頂きました。
 
-AACファイルの読み込みについては、aaceditのソースを参考にさせて頂いた。
+AACファイルの読み込みについては、aaceditのソースを参考にさせて頂きました。
