@@ -1,5 +1,5 @@
 # aacdmsplit
-Lossless splitter for dual mono AAC.
+Lossless AAC splitter for dual mono ATDS
 ## What is this?
 デュアルモノAAC ATDSファイルを二つのモノラルAACファイルに無劣化(再エンコード無し)で分離するツール。
 
