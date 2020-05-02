@@ -10,7 +10,8 @@ Lossless AAC splitter for dual mono ADTS
 
 ## How to buid
 作者はcygwinのmingwコンパイラを使用してビルドしています。
-ビルドには[libfaad2](https://www.audiocoding.com/faad2.html)に同梱のパッチ(faad2.patch)を当てた必要です。別途ダウンロードしてビルドしてください。
+ビルドには、同梱のパッチ(faad2.patch)を当てた[libfaad2](https://www.audiocoding.com/faad2.html)が必要です。
+別途ダウンロードしてビルドしてください。
 
 ### ビルド手順
 * libfaad2にパッチ(faad2.patch)を当てる。
