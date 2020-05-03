@@ -223,12 +223,14 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 		}
 		NeAACDecFrameInfo frameInfo;
 		NeAACDecDecode(hAacDec, &frameInfo, p, aac_frame_length);
+		unsigned char silent[MAX_BUF];
 		if (frameInfo.error) {
 			/* –³‰¹ƒtƒŒ[ƒ€‚Å‘ã‘Ö */
 			reset_bitstream();
 			aac_frame_length = adts_frame_silent(p) >> 3;
-			NeAACDecDecode(hAacDec, &frameInfo, bitstream.buf, aac_frame_length);
-			p = bitstream.buf;
+			memcpy(silent, bitstream.buf, aac_frame_length);
+			p = silent;
+			NeAACDecDecode(hAacDec, &frameInfo, p, aac_frame_length);
 		}
 		int protection_absent = bitstoint(p, 15, 1);
 		for (int i=0; i<2; i++) {
@@ -241,8 +243,6 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 
 			int ret = 0;
 			int pos_len, pos_crc;
-			int start_bits = frameInfo.element_start[i];
-			int end_bits = frameInfo.element_end[i];
 
 			reset_bitstream();
 			ret += putbits(12, 0xFFF); /* sync word */
@@ -272,13 +272,24 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 			}
 	
 			/* copy SCE */
+			int start_bits = frameInfo.element_start[i];
+			int end_bits = frameInfo.element_end[i];
+
 			int id_syn_ele = bitstoint(p + (start_bits>>3), start_bits&7, 3);
 			if (id_syn_ele != ID_SCE) {
 				printf("ID: %d (expected %d)\n", id_syn_ele, ID_SCE);
 			}
-			int pos_sce = bitstream.pos + 3;
+			ret += putbits(3, ID_SCE);
+			int element_instance_tag =
+				bitstoint(p + ((start_bits+3)>>3), (start_bits+3)&7, 4);
+			if (element_instance_tag != i) {
+				printf("element_instance_tag: %d (expected %d)\n",
+						element_instance_tag, i);
+			}
+			int pos_sce = bitstream.pos;
+			ret += putbits(4, 0); /* element_instance_tag */
 			int pos;
-			for (pos = start_bits; pos + 16 <= end_bits; pos += 16) {
+			for (pos = start_bits+7; pos + 16 <= end_bits; pos += 16) {
 				int d = bitstoint(p + (pos>>3), pos&7, 16);
 				ret += putbits(16, d);
 			}
@@ -302,7 +313,7 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 				setpos(pos_crc); putbits(16, calculate_crc()); 
 			}
 
-			fwrite(&bitstream.buf, 1, ret>>3, f[i]);
+			fwrite(bitstream.buf, 1, ret>>3, f[i]);
 		}
 	}
 	printf("\n");
@@ -505,7 +516,6 @@ int dualmono_splitter::adts_frame_silent(unsigned char *data)
 	ret += putbits(13, 0); /* frame_length (dummy, will be set later) */
 	ret += putbits(11, 0x7ff); /* adts_buffer_fullness */
 	ret += putbits(2, number_of_raw_data_blocks_in_frame);
-
 
 	if (number_of_raw_data_blocks_in_frame == 0) {
 		clear_crc_target();
