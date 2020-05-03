@@ -259,7 +259,7 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 			ret += putbits(1,0); /* copyright_identification_start */
 			pos_len = bitstream.pos;
 			ret += putbits(13,0); /* frame_length (dummy, will be set later) */
-			ret += putbits(11,0x7ff); /* adts_buffer_fullness */
+			ret += putbits(11,0x7FF); /* adts_buffer_fullness */
 			ret += putbits(2,0); /* number_of_raw_data_blocks_in_frame */
 
 			clear_crc_target();
@@ -532,7 +532,7 @@ int dualmono_splitter::adts_frame_silent(unsigned char *data)
 		pos_pos = bitstream.pos;
 		if (protection_absent == 0) {
 			for (i=1; i<number_of_raw_data_blocks_in_frame + 1; i++) {
-				ret += putbits(16, 0); /* raw_data_block_position[] (dummy, will be set later*/
+				ret += putbits(16, 0); /* raw_data_block_position[] (dummy, will be set later) */
 			}
 			ret += putbits(16, 0); /* CRC (dummy, will be set later) */
 		}
