@@ -352,6 +352,7 @@ void dualmono_splitter::aacrelease(void)
 		free(aacheader);
 		aacheader = aacheadernext;
 	}
+	memset(&aacdata, 0, sizeof(aacdata));
 	return;
 }
 
