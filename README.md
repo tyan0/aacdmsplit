@@ -20,6 +20,8 @@ Lossless AAC splitter for dual mono ADTS
 
 以上
 
+小変更でLinux上でもビルドできるはずです。
+
 ## License
 libfaad2をスタティックリンクしているので、[GPL v2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)とします。
 
