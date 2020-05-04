@@ -226,6 +226,7 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 		unsigned char silent[MAX_BUF];
 		if (frameInfo.error) {
 			/* 無音フレームで代替 */
+			printf("\n%d フレーム目が異常です。無音フレームで代替します。\n", fcnt);
 			reset_bitstream();
 			aac_frame_length = adts_frame_silent(p) >> 3;
 			memcpy(silent, bitstream.buf, aac_frame_length);
