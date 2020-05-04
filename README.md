@@ -26,4 +26,4 @@ libfaad2をスタティックリンクしているので、[GPL v2](https://www.
 ## Special thanks
 デュアルモノのSCEの切り出しについては、[Amatsukaze](https://github.com/nekopanda/Amatsukaze)のソースを参考にさせて頂きました。
 
-AACファイルの読み込みについては、aaceditのソースを参考にさせて頂きました。
+AACファイルの読み込みについては、aaceditのソースを流用させて頂きました。
