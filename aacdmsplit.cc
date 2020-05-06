@@ -51,37 +51,37 @@ int dualmono_splitter::aacopen(const char *filepath)
 					printf("最終フレーム(第%uフレーム)が不完全です。廃棄します。\n", aacframecnt);
 					break; /* 不完全な最終フレームは廃棄 */
 				}
-				if ( readbyte + aac_frame_length + 2 <= filesize ) {
+				if (readbyte + aac_frame_length == filesize
+						|| (readbyte + aac_frame_length + 2 <= filesize
+							&& *(p + aac_frame_length) == 0xFF
+							&& (*(p + aac_frame_length + 1) & 0xF6) == 0xF0)) {
 					/* 次のフレームのヘッダチェック */
 					/* 信頼できないフレームのヘッダは無視 */
-					if ( *(p + aac_frame_length) == 0xFF
-							&& (*(p + aac_frame_length + 1) & 0xF6) == 0xF0) {
-						int number_of_raw_data_blocks_in_frame = bitstoint(p + 6, 6, 2);
-						int sampling_rate = sampling_frequency_index[bitstoint(p, 18, 4)];
-						double cur_frame_rate =
-							(double)sampling_rate / (number_of_raw_data_blocks_in_frame + 1) / 1024;
-						if (sampling_rate>0) {
-							aacdata.duration += 1 / cur_frame_rate;
+					int number_of_raw_data_blocks_in_frame = bitstoint(p + 6, 6, 2);
+					int sampling_rate = sampling_frequency_index[bitstoint(p, 18, 4)];
+					double cur_frame_rate =
+						(double)sampling_rate / (number_of_raw_data_blocks_in_frame + 1) / 1024;
+					if (sampling_rate>0) {
+						aacdata.duration += 1 / cur_frame_rate;
+					}
+					tmpchannel = bitstoint(p, 23, 3);
+					if (tmpchannel == 0) is_dualmono = true;
+					if (channel != tmpchannel) {
+						AACHEADER *tmpaacheader = (AACHEADER *)calloc(1, sizeof(AACHEADER));
+						if (tmpaacheader == NULL)
+							errorexit("メモリ確保に失敗しました。");
+						tmpaacheader->frame = aacframecnt;
+						tmpaacheader->version = bitstoint(p, 12, 1);
+						tmpaacheader->profile = bitstoint(p, 16, 2);
+						tmpaacheader->sampling_rate = bitstoint(p, 18, 4);
+						tmpaacheader->channel = channel = tmpchannel;
+						tmpaacheader->next = NULL;
+						if (!aacheader) {
+							aacheadertop = tmpaacheader;
+						} else {
+							aacheader->next = tmpaacheader;
 						}
-						tmpchannel = bitstoint(p, 23, 3);
-						if (tmpchannel == 0) is_dualmono = true;
-						if (channel != tmpchannel) {
-							AACHEADER *tmpaacheader = (AACHEADER *)calloc(1, sizeof(AACHEADER));
-							if (tmpaacheader == NULL)
-								errorexit("メモリ確保に失敗しました。");
-							tmpaacheader->frame = aacframecnt;
-							tmpaacheader->version = bitstoint(p, 12, 1);
-							tmpaacheader->profile = bitstoint(p, 16, 2);
-							tmpaacheader->sampling_rate = bitstoint(p, 18, 4);
-							tmpaacheader->channel = channel = tmpchannel;
-							tmpaacheader->next = NULL;
-							if (!aacheader) {
-								aacheadertop = tmpaacheader;
-							} else {
-								aacheader->next = tmpaacheader;
-							}
-							aacheader = tmpaacheader;
-						}
+						aacheader = tmpaacheader;
 					}
 				}
 				memcpy(aacdata.data + copybyte, p, aac_frame_length);
