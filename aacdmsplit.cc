@@ -9,9 +9,7 @@ inline bool is_sync(unsigned char *p)
 
 void dualmono_splitter::aacopen(const char *filepath)
 {
-	unsigned char fixed_header[4] = {0xff, 0xf0, 0, 0};
-	unsigned char fixed_header_mask[4] = {0xff, 0xf6, 0, 0};
-	unsigned char fixed_header_current[4] = {0, 0, 0, 0};
+	unsigned char fixed_header[4] = {0, 0, 0, 0};
 
 	FILE *f = fopen(filepath, "rb");
 	if (f == NULL) {
@@ -48,8 +46,6 @@ void dualmono_splitter::aacopen(const char *filepath)
 			break; /* 不完全な最終フレームは廃棄 */
 		}
 		if (is_sync(p)) {
-			memcpy(fixed_header, p, 4);
-			memcpy(fixed_header_mask, "\xff\xff\xff\xf0", 4);
 			if (fcnt >= index_size) {
 				index_size += INDEX_SIZE_INC;
 				aacdata.index = (unsigned int *)realloc(aacdata.index,
@@ -60,8 +56,7 @@ void dualmono_splitter::aacopen(const char *filepath)
 			}
 			aacdata.index[fcnt] = total_copied;
 			frame_length = getbits(p, 30, 13);
-			size_t next_frame_pos = total_read + frame_length;
-			if (next_frame_pos > filesize) {
+			if (total_read + frame_length > filesize) {
 				/* 終端はlengthより少ないことがある */
 				printf("Incompete last frame (%dth frame). Discarded.\n", fcnt);
 				break; /* 不完全な最終フレームは廃棄 */
@@ -72,13 +67,17 @@ void dualmono_splitter::aacopen(const char *filepath)
 			memcpy(aacdata.data + total_copied, p, frame_length);
 
 			/* Fixed headerの変化をチェック */
-			unsigned char tmp[4];
-			memcpy(tmp, p, 4);
-			tmp[3] &= 0xf0;
+			unsigned char tmp_header[4];
+			memcpy(tmp_header, p, 4);
+			tmp_header[3] &= 0xf0;
+			/* 次のフレームが正しい場所に存在しない場合、現在のフレームが
+			   壊れている可能性があるので、ヘッダチェックを無効化する。
+			   但し、SYNCの長さ(12 bits)分残っていない時(最終フレーム)は
+			   チェックを有効化する。 */
 			bool next_frame_valid =
 				remain < frame_length + 2 || is_sync(p + frame_length);
-			if (next_frame_valid && memcmp(tmp, fixed_header_current, 4)) {
-				memcpy(fixed_header_current, tmp, 4);
+			if (next_frame_valid && memcmp(tmp_header, fixed_header, 4)) {
+				memcpy(fixed_header, tmp_header, 4);
 				HEADER_CHANGE *h_new =
 					(HEADER_CHANGE *) calloc(1, sizeof(HEADER_CHANGE));
 				if (h_new == NULL)
@@ -100,7 +99,7 @@ void dualmono_splitter::aacopen(const char *filepath)
 			p += frame_length;
 			remain -= frame_length;
 		} else {
-			unsigned int orig_pos = total_read;
+			size_t orig_pos = total_read;
 			printf("Incorrect %dth frame header.\n", fcnt);
 			if (fcnt > 0) { /* 先頭フレーム以外 */
 				/* Re-sync */
@@ -112,36 +111,31 @@ void dualmono_splitter::aacopen(const char *filepath)
 					remain = fread(buf, 1, BUF_SIZE, f);
 					p = buf;
 				}
-				int total_read0 = total_read;
 				unsigned char *p0 = p;
+				size_t remain0 = remain;
 				/* Fixed Header は同じであることを期待 */
-				while (remain && !(
-							(p[0] & fixed_header_mask[0])
-							== (fixed_header[0] & fixed_header_mask[0]) &&
-							(p[1] & fixed_header_mask[1])
-							== (fixed_header[1] & fixed_header_mask[1]) &&
-							(p[2] & fixed_header_mask[2])
-							== (fixed_header[2] & fixed_header_mask[2]) &&
-							(p[3] & fixed_header_mask[3])
-							== (fixed_header[3] & fixed_header_mask[3])
-							)) {
+				unsigned char tmp_header[4];
+				memcpy(tmp_header, p, 4);
+				tmp_header[3] &= 0xf0;
+				while (remain >= 4 && memcmp(p, fixed_header, 4)) {
 					p ++;
 					remain --;
 					total_read ++;
 				}
-				if (remain == 0) {
-					printf("Fixed header which matches with previous frame not found.\n");
-					total_read = total_read0;
+				if (remain < 4) {
+					printf("Fixed-header which matches with previous frame not found.\n");
+					total_read = orig_pos;
 					p = p0;
+					remain = remain0;
 				}
 			}
-			/* 先頭フレーム位置を探す */
-			while (remain && !is_sync(p)) {
+			/* 先頭フレーム位置をもう一度探す */
+			while (remain >= 2 && !is_sync(p)) {
 				p ++;
 				remain --;
 				total_read ++;
 			}
-			if (remain == 0) {
+			if (remain < 2) {
 				if (!feof(f)) { /* Not EOF */
 					errorexit("Cannot correct the frame start position.");
 				}
