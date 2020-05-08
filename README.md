@@ -23,6 +23,7 @@ Lossless AAC splitter for dual mono ADTS
 小変更でLinux上でもビルドできるはずです。具体的には、
 * Makefile中、CXXの定義を変更
 * aacdmsplit.ccに ```#include <linux/limits.h>``` を追加
+
 ぐらいでしょうか。
 
 ## License
