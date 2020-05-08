@@ -5,27 +5,21 @@
 #include <string.h>
 #include <neaacdec.h>
 
-#define FRAME_BYTE_LIMIT	4096
-#define BUFFER_SIZE		32768
-#define INDEX_CHUNK_SIZE	4096
+#define MAX_FRAME_SIZE ((1<<13)-1)
+#define BUF_SIZE 65536
+#define INDEX_SIZE_INC 4096
 
-typedef struct _aacdata {
+typedef struct {
 	unsigned char *data;
-	size_t size;
 	unsigned int *index;
-	unsigned int framecnt;
-	double duration;
-	struct _aacheader *header;
+	size_t size;
+	unsigned int nframe;
 } AACDATA;
 
-typedef struct _aacheader {
+typedef struct header_change_t {
 	unsigned int frame;
-	unsigned int version;
-	unsigned int profile;
-	int sampling_rate;
-	int channel;
-	struct _aacheader *next;
-} AACHEADER;
+	struct header_change_t *next;
+} HEADER_CHANGE;
 
 enum AAC_SYNTAX_ELEMENTS {
 	ID_SCE = 0x0,
@@ -47,6 +41,7 @@ enum AAC_SYNTAX_ELEMENTS {
 class dualmono_splitter {
 private:
 	AACDATA aacdata;
+	HEADER_CHANGE *header_change;
 	bool is_dualmono;
 	struct {
 		unsigned char buf[MAX_BUF];
@@ -64,11 +59,10 @@ private:
 	void aacrelease(void);
 
 	/* Bit access stuff */
-	unsigned long bitstoint(unsigned char *data,
-			unsigned int shift, unsigned int n);
 	void reset_bitstream(void);
 	void setpos(int pos);
 	int putbits(int n, unsigned long x);
+	unsigned long getbits(unsigned char *p, int pos, int bits);
 	unsigned long getbits(int bits);
 
 	/* CRC stuff */
@@ -90,13 +84,14 @@ private:
 public:
 	dualmono_splitter() {
 		memset(&aacdata, 0, sizeof(aacdata));
+		header_change = NULL;
 		reset_bitstream();
 		is_dualmono = false;
 	};
 	~dualmono_splitter() {
 		aacrelease();
 	}
-	int aacopen(const char *filepath);
+	void aacopen(const char *filepath);
 	bool isdualmono(void) {
 		return is_dualmono;
 	}

@@ -2,186 +2,181 @@
 #include <string.h>
 #include "aacdmsplit.h"
 
-const int dualmono_splitter::sampling_frequency_index[16] = {
-	96000, 88200, 64000, 48000,
-	44100, 32000, 24000, 22050,
-	16000, 12000, 11025, 8000,
-	-12, -13, -14, -15};
-
-int dualmono_splitter::aacopen(const char *filepath)
+inline bool is_sync(unsigned char *p)
 {
-	int ret = 1;
-	unsigned int aacframecnt = 0, indexchunk = INDEX_CHUNK_SIZE;
-	unsigned int readbyte = 0, copybyte = 0;
-	unsigned int channel = 0xFF, tmpchannel, aac_frame_length = 0;
-	unsigned char buffer[BUFFER_SIZE], *p, *plast;
-	AACHEADER *aacheader = NULL, *aacheadertop = NULL;
-	FILE *f;
-	struct stat fst;
-	unsigned int filesize, readchunk = BUFFER_SIZE;
-	unsigned char fixed_header[4] = {0xff, 0xf0};
-	unsigned char fixed_header_mask[4] = {0xff, 0xf6};
+	return p[0] == 0xff && (p[1] & 0xf6) == 0xf0;
+}
 
-	if (!filepath)
-		return 0;
-	f = fopen(filepath, "rb");
+void dualmono_splitter::aacopen(const char *filepath)
+{
+	unsigned char fixed_header[4] = {0xff, 0xf0, 0, 0};
+	unsigned char fixed_header_mask[4] = {0xff, 0xf6, 0, 0};
+	unsigned char fixed_header_current[4] = {0, 0, 0, 0};
+
+	FILE *f = fopen(filepath, "rb");
 	if (f == NULL) {
-		errorexit("AAC ファイルの読み込みに失敗しました。");
+		errorexit("Cannot open AAC ADTS file for input.");
+	}
+	struct stat fst;
+	fstat(fileno(f), &fst);
+	size_t filesize = fst.st_size;
+
+	aacdata.data = (unsigned char *)calloc(filesize, sizeof(char));
+	if (aacdata.data == NULL) {
+		errorexit("Faild to allocate memory.");
 	}
 
-	fstat(fileno(f), &fst);
-	filesize = fst.st_size;
-	aacdata.data = (unsigned char *)calloc(filesize, sizeof(char));
-	aacdata.index = (unsigned int *)calloc(indexchunk, sizeof(int));
-	aacdata.duration = 0;
-	if (aacdata.data == NULL || aacdata.index == NULL)
-		errorexit("メモリ確保に失敗しました。");
-	readchunk = fread(buffer, 1, readchunk, f);
-	while (readchunk > 0) {
-		p = buffer;
-		plast = p + readchunk - 7;
-		while (p < plast) {
-			if (*p == 0xFF && (*(p+1) & 0xF6) == 0xF0) {
-				memcpy(fixed_header, p, 4);
-				memcpy(fixed_header_mask, "\xff\xff\xff\xf0", 4);
-				aacdata.index[aacframecnt] = copybyte;
-				aac_frame_length = bitstoint(p + 3, 6, 13);
-				if (readbyte + aac_frame_length > filesize) {
-					/* 終端はlengthより少ないことがある */
-					printf("最終フレーム(第%uフレーム)が不完全です。廃棄します。\n", aacframecnt);
-					break; /* 不完全な最終フレームは廃棄 */
+	aacdata.index = (unsigned int *)calloc(INDEX_SIZE_INC, sizeof(int));
+	if (aacdata.index == NULL) {
+		errorexit("Faild to allocate memory.");
+	}
+	int index_size = INDEX_SIZE_INC;
+
+	unsigned char buf[BUF_SIZE];
+	size_t remain = fread(buf, 1, BUF_SIZE, f);
+
+	int fcnt = 0;
+	HEADER_CHANGE *h = NULL;
+	size_t total_read = 0;
+	size_t total_copied = 0;
+	unsigned int frame_length = 0;
+	unsigned char *p = buf;
+	while (remain) {
+		if (remain <= 7) {
+			/* 終端はヘッダサイズより少ないことがある */
+			printf("Incompete last frame (%dth frame). Discarded.\n", fcnt);
+			break; /* 不完全な最終フレームは廃棄 */
+		}
+		if (is_sync(p)) {
+			memcpy(fixed_header, p, 4);
+			memcpy(fixed_header_mask, "\xff\xff\xff\xf0", 4);
+			if (fcnt >= index_size) {
+				index_size += INDEX_SIZE_INC;
+				aacdata.index = (unsigned int *)realloc(aacdata.index,
+						index_size * sizeof(unsigned int));
+				if (aacdata.index == NULL) {
+					errorexit("Failed to allocate memory.");
 				}
-				if (readbyte + aac_frame_length == filesize
-						|| (readbyte + aac_frame_length + 2 <= filesize
-							&& *(p + aac_frame_length) == 0xFF
-							&& (*(p + aac_frame_length + 1) & 0xF6) == 0xF0)) {
-					/* 次のフレームのヘッダチェック */
-					/* 信頼できないフレームのヘッダは無視 */
-					int number_of_raw_data_blocks_in_frame = bitstoint(p + 6, 6, 2);
-					int sampling_rate = sampling_frequency_index[bitstoint(p, 18, 4)];
-					double cur_frame_rate =
-						(double)sampling_rate / (number_of_raw_data_blocks_in_frame + 1) / 1024;
-					if (sampling_rate>0) {
-						aacdata.duration += 1 / cur_frame_rate;
-					}
-					tmpchannel = bitstoint(p, 23, 3);
-					if (tmpchannel == 0) is_dualmono = true;
-					if (channel != tmpchannel) {
-						AACHEADER *tmpaacheader = (AACHEADER *)calloc(1, sizeof(AACHEADER));
-						if (tmpaacheader == NULL)
-							errorexit("メモリ確保に失敗しました。");
-						tmpaacheader->frame = aacframecnt;
-						tmpaacheader->version = bitstoint(p, 12, 1);
-						tmpaacheader->profile = bitstoint(p, 16, 2);
-						tmpaacheader->sampling_rate = bitstoint(p, 18, 4);
-						tmpaacheader->channel = channel = tmpchannel;
-						tmpaacheader->next = NULL;
-						if (!aacheader) {
-							aacheadertop = tmpaacheader;
-						} else {
-							aacheader->next = tmpaacheader;
-						}
-						aacheader = tmpaacheader;
-					}
-				}
-				memcpy(aacdata.data + copybyte, p, aac_frame_length);
-				aacframecnt++;
-				if (aacframecnt >= indexchunk) {
-					indexchunk += INDEX_CHUNK_SIZE;
-					aacdata.index = (unsigned int *)realloc(aacdata.index, indexchunk * sizeof(unsigned int));
-					if (aacdata.index == NULL) {
-						errorexit("メモリ確保に失敗しました。");
-					}
-				}
-				readbyte += aac_frame_length;
-				copybyte += aac_frame_length;
-				if (filesize <= readbyte)
-					break;
-				else if ((p + aac_frame_length > plast - FRAME_BYTE_LIMIT) && readchunk >= BUFFER_SIZE) {
-					fseek(f, readbyte, SEEK_SET);
-					break;
-				}
-				p += aac_frame_length; /* フレーム分移動 */
-			} else {
-				unsigned int orig_pos = readbyte;
-				printf("%u フレーム目のヘッダー情報が正しくありません。\n", aacframecnt);
-				if (aacframecnt > 0) { /* 先頭フレーム以外 */
-					unsigned int readbyte0;
-					unsigned char *p0;
-					/* Re-sync */
-					if (readchunk >= BUFFER_SIZE /* Not EOF */) {
-		 				/* 前のフレームが不完全だったかもしれないので、
-						   前のフレームの syncword の直後から検索 */
-						readbyte -= aac_frame_length - 2;
-						fseek(f, readbyte, SEEK_SET);
-						readchunk = fread(buffer, 1, readchunk, f);
-						p = buffer;
-						plast = p + readchunk - 7;
-					}
-					readbyte0 = readbyte;
-					p0 = p;
-					/* Fixed Header は同じであることを期待 */
-					while (p < plast && !(
-						(p[0] & fixed_header_mask[0])
-							== (fixed_header[0] & fixed_header_mask[0]) &&
-						(p[1] & fixed_header_mask[1])
-							== (fixed_header[1] & fixed_header_mask[1]) &&
-						(p[2] & fixed_header_mask[2])
-							== (fixed_header[2] & fixed_header_mask[2]) &&
-						(p[3] & fixed_header_mask[3])
-							== (fixed_header[3] & fixed_header_mask[3])
-					)) {
-						p++;
-						readbyte ++;
-					}
-					if (p >= plast) {
-						printf("直前のフレームと同じFixed Headerが見つかりません。\n");
-						readbyte = readbyte0;
-						p = p0;
-					}
-				}
-				/* 先頭フレーム位置を探す */
-				while (p < plast
-						&& !(*p == 0xFF && (*(p+1)&0xF6) == 0xF0)) {
-					p++;
-					readbyte ++;
-				}
-				if (p >= plast) {
-					if (readchunk >= BUFFER_SIZE) { /* Not EOF */
-						fclose(f);
-						errorexit("フレーム先頭位置を修正できませんでした。");
-					}
+			}
+			aacdata.index[fcnt] = total_copied;
+			frame_length = getbits(p, 30, 13);
+			size_t next_frame_pos = total_read + frame_length;
+			if (next_frame_pos > filesize) {
+				/* 終端はlengthより少ないことがある */
+				printf("Incompete last frame (%dth frame). Discarded.\n", fcnt);
+				break; /* 不完全な最終フレームは廃棄 */
+			}
+			unsigned int channel = getbits(p, 23, 3);
+			if (channel == 0) is_dualmono = true;
+
+			memcpy(aacdata.data + total_copied, p, frame_length);
+
+			/* Fixed headerの変化をチェック */
+			unsigned char tmp[4];
+			memcpy(tmp, p, 4);
+			tmp[3] &= 0xf0;
+			bool next_frame_valid =
+				remain < frame_length + 2 || is_sync(p + frame_length);
+			if (next_frame_valid && memcmp(tmp, fixed_header_current, 4)) {
+				memcpy(fixed_header_current, p, 4);
+				fixed_header_current[3] &= 0xf0;
+				HEADER_CHANGE *h_new =
+					(HEADER_CHANGE *) calloc(1, sizeof(HEADER_CHANGE));
+				if (h_new == NULL)
+					errorexit("Failed to allocate memory.");
+				h_new->frame = fcnt;
+				h_new->next = NULL;
+				if (h == NULL) {
+					header_change = h_new;
+					h = header_change;
 				} else {
-					if (aacframecnt >= 1 && readbyte < orig_pos) {
-						/* 直前の損傷フレームを破棄 */
-						int len;
-						aacframecnt--;
-						copybyte -= aac_frame_length;
-						/* 無音フレームで代替 */
-						printf("%d フレーム目が不完全です。無音フレームで代替します。\n", aacframecnt);
-						reset_bitstream();
-						len = adts_frame_silent(p) >> 3;
-						memcpy(aacdata.data + copybyte, bitstream.buf, len);
-						aacdata.index[aacframecnt] = copybyte;
-						aacframecnt++;
-						copybyte += len;
-					}
-					printf("フレーム先頭位置を修正 (0x%08x → 0x%08x)\n", orig_pos, readbyte);
+					h->next = h_new;
+					h = h->next;
 				}
-				ret = 2;
+			}
+
+			fcnt ++;
+			total_read += frame_length;
+			total_copied += frame_length;
+			p += frame_length;
+			remain -= frame_length;
+		} else {
+			unsigned int orig_pos = total_read;
+			printf("Incorrect %dth frame header.\n", fcnt);
+			if (fcnt > 0) { /* 先頭フレーム以外 */
+				/* Re-sync */
+				if (!feof(f)) {
+					/* 前のフレームが不完全だったかもしれないので、
+					   前のフレームの syncword の直後から検索 */
+					total_read -= frame_length - 2;
+					fseek(f, total_read, SEEK_SET);
+					remain = fread(buf, 1, BUF_SIZE, f);
+					p = buf;
+				}
+				int total_read0 = total_read;
+				unsigned char *p0 = p;
+				/* Fixed Header は同じであることを期待 */
+				while (remain && !(
+							(p[0] & fixed_header_mask[0])
+							== (fixed_header[0] & fixed_header_mask[0]) &&
+							(p[1] & fixed_header_mask[1])
+							== (fixed_header[1] & fixed_header_mask[1]) &&
+							(p[2] & fixed_header_mask[2])
+							== (fixed_header[2] & fixed_header_mask[2]) &&
+							(p[3] & fixed_header_mask[3])
+							== (fixed_header[3] & fixed_header_mask[3])
+							)) {
+					p ++;
+					remain --;
+					total_read ++;
+				}
+				if (remain == 0) {
+					printf("Fixed header which matches with previous frame not found.\n");
+					total_read = total_read0;
+					p = p0;
+				}
+			}
+			/* 先頭フレーム位置を探す */
+			while (remain && !is_sync(p)) {
+				p ++;
+				remain --;
+				total_read ++;
+			}
+			if (remain == 0) {
+				if (!feof(f)) { /* Not EOF */
+					errorexit("Cannot correct the frame start position.");
+				}
+			} else {
+				if (fcnt > 0 && total_read < orig_pos) {
+					/* 直前の損傷フレームを破棄 */
+					fcnt --;
+					total_copied -= frame_length;
+					/* 無音フレームで代替 */
+					printf("Incomplete %dth frame. Substituted with a silent frame.\n", fcnt);
+					reset_bitstream();
+					int len = adts_frame_silent(p) >> 3;
+					memcpy(aacdata.data + total_copied, bitstream.buf, len);
+					aacdata.index[fcnt] = total_copied;
+					fcnt ++;
+					total_copied += len;
+				}
+				printf("The frame position corrected. (0x%08x -> 0x%08x)\n", orig_pos, total_read);
 			}
 		}
-		readchunk = fread(buffer, 1, readchunk, f);
+		if (remain < MAX_FRAME_SIZE + 7 && !feof(f)) {
+			fseek(f, total_read, SEEK_SET);
+			remain = fread(buf, 1, BUF_SIZE, f);
+			p = buf;
+		}
 	}
 	fclose(f);
-	if (aacframecnt == 0) {
-		errorexit("AAC ADTS ファイルではありません。");
+	if (fcnt == 0) {
+		errorexit("Not a AAC ADTS file.");
 	}
-	aacdata.index[aacframecnt] = copybyte;
+	aacdata.index[fcnt] = total_copied;
 	aacdata.size = filesize;
-	aacdata.framecnt = aacframecnt;
-	aacdata.header = aacheadertop;
-	return ret;
+	aacdata.nframe = fcnt;
+	return;
 }
 
 void dualmono_splitter::split(const char *filename0, const char *filename1)
@@ -195,22 +190,22 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 	unsigned long samplerate;
 	unsigned char channels;
 	unsigned char *p = aacdata.data;
-	unsigned int aac_frame_length = bitstoint(p + 3, 6, 13);
-	NeAACDecInit(hAacDec, p, aac_frame_length, &samplerate, &channels);
+	unsigned int frame_length = getbits(p, 30, 13);
+	NeAACDecInit(hAacDec, p, frame_length, &samplerate, &channels);
 
-	AACHEADER *h = aacdata.header;
+	HEADER_CHANGE *h = header_change;
 	FILE *f[2];
 	f[0] = fopen(filename0, "wb");
 	f[1] = fopen(filename1, "wb");
 	if (f[0] == NULL || f[1] == NULL) {
 		errorexit("Cannot open output file.");
 	}
-	for (unsigned int fcnt=0; fcnt < aacdata.framecnt; fcnt++) {
-		if (fcnt % 100 == 99 || fcnt+1 == aacdata.framecnt)
+	for (unsigned int fcnt=0; fcnt < aacdata.nframe; fcnt++) {
+		if (fcnt % 100 == 99 || fcnt+1 == aacdata.nframe)
 			printf("%8d/%d (%d%%)\r",
-					fcnt+1, aacdata.framecnt, (fcnt+1)*100/aacdata.framecnt);
+					fcnt+1, aacdata.nframe, (fcnt+1)*100/aacdata.nframe);
 		p = aacdata.data + aacdata.index[fcnt];
-		aac_frame_length = bitstoint(p + 3, 6, 13);
+		frame_length = getbits(p, 30, 13);
 		if (h->next && h->next->frame == fcnt) {
 			h = h->next;
 			/* Reopen decoder */
@@ -219,26 +214,29 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 			conf = NeAACDecGetCurrentConfiguration(hAacDec);
 			conf->outputFormat = FAAD_FMT_16BIT;
 			NeAACDecSetConfiguration(hAacDec, conf);
-			NeAACDecInit(hAacDec, p, aac_frame_length, &samplerate, &channels);
+			NeAACDecInit(hAacDec, p, frame_length, &samplerate, &channels);
 		}
 		NeAACDecFrameInfo frameInfo;
-		NeAACDecDecode(hAacDec, &frameInfo, p, aac_frame_length);
+		NeAACDecDecode(hAacDec, &frameInfo, p, frame_length);
 		unsigned char silent[MAX_BUF];
 		if (frameInfo.error) {
 			/* 無音フレームで代替 */
-			printf("\n%d フレーム目が異常です。無音フレームで代替します。\n", fcnt);
+			printf("\nMalformed %dth frame. Substituted with a silent frame.\n", fcnt);
 			reset_bitstream();
-			aac_frame_length = adts_frame_silent(p) >> 3;
-			memcpy(silent, bitstream.buf, aac_frame_length);
+			frame_length = adts_frame_silent(p) >> 3;
+			memcpy(silent, bitstream.buf, frame_length);
 			p = silent;
-			NeAACDecDecode(hAacDec, &frameInfo, p, aac_frame_length);
+			NeAACDecDecode(hAacDec, &frameInfo, p, frame_length);
 		}
-		int protection_absent = bitstoint(p, 15, 1);
+		unsigned int version = getbits(p, 12, 1);
+		unsigned int protection_absent = getbits(p, 15, 1);
+		unsigned int profile = getbits(p, 16, 2);
+		unsigned int sampling_rate = getbits(p, 18, 4);
 		for (int i=0; i<2; i++) {
 			if (channels != 0 || frameInfo.fr_ch_ele !=2) {
 				/* デュアルモノ以外のフレームがもしあったら
 				   両方のファイルにそのままコピーする */
-				fwrite(p, 1, aac_frame_length, f[i]);
+				fwrite(p, 1, frame_length, f[i]);
 				continue;
 			}
 
@@ -247,11 +245,11 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 
 			reset_bitstream();
 			ret += putbits(12, 0xFFF); /* sync word */
-			ret += putbits(1,1); /* ID */
+			ret += putbits(1,version); /* ID */
 			ret += putbits(2,0); /* Layer */
 			ret += putbits(1,protection_absent);
-			ret += putbits(2,h->profile);
-			ret += putbits(4,h->sampling_rate);
+			ret += putbits(2,profile);
+			ret += putbits(4,sampling_rate);
 			ret += putbits(1,0); /* private bits */
 			ret += putbits(3,1); /* channel configuration (MONO) */
 			ret += putbits(1,0); /* original copy */
@@ -276,13 +274,12 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 			int start_bits = frameInfo.element_start[i];
 			int end_bits = frameInfo.element_end[i];
 
-			int id_syn_ele = bitstoint(p + (start_bits>>3), start_bits&7, 3);
+			int id_syn_ele = getbits(p, start_bits, 3);
 			if (id_syn_ele != ID_SCE) {
 				printf("ID: %d (expected %d)\n", id_syn_ele, ID_SCE);
 			}
 			ret += putbits(3, ID_SCE);
-			int element_instance_tag =
-				bitstoint(p + ((start_bits+3)>>3), (start_bits+3)&7, 4);
+			int element_instance_tag = getbits(p, start_bits+3, 4);
 			if (element_instance_tag != i) {
 				printf("element_instance_tag: %d (expected %d)\n",
 						element_instance_tag, i);
@@ -290,13 +287,13 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 			int pos_sce = bitstream.pos;
 			ret += putbits(4, 0); /* element_instance_tag */
 			int pos;
-			for (pos = start_bits+7; pos + 16 <= end_bits; pos += 16) {
-				int d = bitstoint(p + (pos>>3), pos&7, 16);
-				ret += putbits(16, d);
+			for (pos = start_bits+7; pos + 32 <= end_bits; pos += 32) {
+				int d = getbits(p, pos, 32);
+				ret += putbits(32, d);
 			}
 			int remain = end_bits - pos;
 			if (remain > 0) {
-				int d = bitstoint(p + (pos>>3), pos&7, remain);
+				int d = getbits(p, pos, remain);
 				ret += putbits(remain, d);
 			}
 			add_crc_target(pos_sce, bitstream.pos, 192); /* SCE */
@@ -325,35 +322,22 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 
 void dualmono_splitter::errorexit(const char *errorstr)
 {
-	fprintf(stderr, "エラー: %s\n", errorstr);
-	exit(1);
-}
-
-unsigned long dualmono_splitter::bitstoint(unsigned char *data,
-	unsigned int shift, unsigned int n)
-{
-	unsigned long ret;
-
-	memcpy(&ret, data, sizeof(unsigned long));
-	ret = (ret << 24) | (ret << 8 & 0x00FF0000) | (ret >> 8 & 0x0000FF00) | (ret >> 24 & 0x000000FF);
-	ret = (ret >> (32 - shift - n));
-	ret &= 0xFFFFFFFF & ((1 << n) - 1);
-	return ret;
+	fprintf(stderr, "Error: %s\n", errorstr);
+	exit(-1);
 }
 
 void dualmono_splitter::aacrelease(void)
 {
-	AACHEADER *aacheader, *aacheadernext;
-
 	if (aacdata.data) free(aacdata.data);
 	if (aacdata.index) free(aacdata.index);
-	aacheader = aacdata.header;
-	while (aacheader) {
-		aacheadernext = aacheader->next;
-		free(aacheader);
-		aacheader = aacheadernext;
+	HEADER_CHANGE *h = header_change;
+	while (h) {
+		HEADER_CHANGE *next = h->next;
+		free(h);
+		h = next;
 	}
 	memset(&aacdata, 0, sizeof(aacdata));
+	header_change = NULL;
 	return;
 }
 
@@ -395,30 +379,37 @@ int dualmono_splitter::putbits(int n, unsigned long x)
 	return ret;
 }
 
-unsigned long dualmono_splitter::getbits(int bits)
+unsigned long dualmono_splitter::getbits(unsigned char *p, int pos, int bits)
 {
-	unsigned long ret = 0;
-	int b = 8 - (bitstream.pos & 0x07);
-	int i = bitstream.pos >> 3;
-
 	if (bits > 32) errorexit("getbits(): bits > 32 not supported.");
-	if (bitstream.pos < 0 || bitstream.pos + bits > bitstream.len) {
-		errorexit("getbits(): range exceeded the buffer.");
-	}
-	ret = 0;
+
+	unsigned long ret = 0;
+	int b = 8 - (pos & 0x07);
+	int i = pos >> 3;
+
 	while (bits >= b) {
 		ret <<= b;
-		ret |= bitstream.buf[i] & ((1<<b)-1);
-		bitstream.pos += b;
+		ret |= p[i] & ((1<<b)-1);
+		pos += b;
 		bits -= b;
 		i ++;
 		b = 8;
 	}
 	if (bits > 0) {
 		ret <<= bits;
-		ret |= ((bitstream.buf[i] >> (b - bits)) & ((1<<bits) -1));
-		bitstream.pos += bits;
+		ret |= ((p[i] >> (b - bits)) & ((1<<bits) -1));
+		pos += bits;
 	}
+	return ret;
+}
+
+unsigned long dualmono_splitter::getbits(int bits)
+{
+	if (bitstream.pos < 0 || bitstream.pos + bits > bitstream.len) {
+		errorexit("getbits(): range exceeded the buffer.");
+	}
+	unsigned long ret = getbits(bitstream.buf, bitstream.pos, bits);
+	bitstream.pos += bits;
 	return ret;
 }
 
@@ -504,9 +495,9 @@ int dualmono_splitter::adts_frame_silent(unsigned char *data)
 {
 	int ret = 0;
 	int pos_len, pos_crc;
-	int protection_absent = bitstoint(data, 15, 1);
-	int channel_configuration = bitstoint(data, 23, 3);
-	int number_of_raw_data_blocks_in_frame = bitstoint(data+6, 6, 2);
+	int protection_absent = getbits(data, 15, 1);
+	int channel_configuration = getbits(data, 23, 3);
+	int number_of_raw_data_blocks_in_frame = getbits(data, 54, 2);
 
 	/* adts_fixed_header() */
 	ret += putbits(28, (data[0]<<20)|(data[1]<<12)|(data[2]<<4)|(data[3]>>4));
