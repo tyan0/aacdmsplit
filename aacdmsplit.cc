@@ -218,7 +218,7 @@ void dualmono_splitter::split(const char *filename0, const char *filename1)
 		}
 		NeAACDecFrameInfo frameInfo;
 		NeAACDecDecode(hAacDec, &frameInfo, p, frame_length);
-		unsigned char silent[MAX_BUF];
+		unsigned char silent[MAX_FRAME_SIZE];
 		if (frameInfo.error) {
 			/* –³‰¹ƒtƒŒ[ƒ€‚Å‘ã‘Ö */
 			printf("\nMalformed %dth frame. Substituted with a silent frame.\n", fcnt);
@@ -348,7 +348,7 @@ void dualmono_splitter::reset_bitstream(void)
 
 void dualmono_splitter::setpos(int pos)
 {
-	if (pos >= (MAX_BUF*8)) errorexit("setpos(): exceeded the buffer.");
+	if (pos >= (MAX_FRAME_SIZE*8)) errorexit("setpos(): exceeded the buffer.");
 	bitstream.pos = pos;
 }
 
@@ -357,7 +357,7 @@ int dualmono_splitter::putbits(int n, unsigned long x)
 	int ret = 0;
 	int b = 8 - (bitstream.pos & 0x07);
 	int i = bitstream.pos >> 3;
-	if (bitstream.pos < 0 || bitstream.pos + n > (MAX_BUF*8)) {
+	if (bitstream.pos < 0 || bitstream.pos + n > (MAX_FRAME_SIZE*8)) {
 		errorexit("putbits(): range exceeded the buffer.");
 	}
 	while (n >= b) {

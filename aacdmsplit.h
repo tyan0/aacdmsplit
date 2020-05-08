@@ -36,7 +36,6 @@ enum AAC_SYNTAX_ELEMENTS {
 #define CRC_POLYNOMIAL 0x8005 /* CRC-16 */
 #define CRC_INIT 0xffff
 
-#define MAX_BUF 8192 /* Maximum frame_length 13bit */
 #define MAX_CRC_TARGETS 16
 class dualmono_splitter {
 private:
@@ -44,7 +43,7 @@ private:
 	HEADER_CHANGE *header_change;
 	bool is_dualmono;
 	struct {
-		unsigned char buf[MAX_BUF];
+		unsigned char buf[MAX_FRAME_SIZE];
 		int len;
 		int pos;
 		int crc_cnt;
@@ -54,7 +53,6 @@ private:
 			int len;
 		} crc_target[MAX_CRC_TARGETS];
 	} bitstream;
-	static const int sampling_frequency_index[16];
 	void errorexit(const char *msg);
 	void aacrelease(void);
 
