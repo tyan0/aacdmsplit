@@ -6,7 +6,7 @@ Lossless AAC splitter for dual mono ADTS
 ## How to use
 ```aacdmsplit <file name>```
 
-元ファイルと同じディレクトリに、元のファイル名に" SCE#0"と" SCE#1"を付加した2つのファイルが出来上がります。
+元ファイルと同じディレクトリに、元のファイル名に" SCE0"と" SCE1"を付加した2つのファイルが出来上がります。
 
 ## How to buid
 作者はcygwinのmingwコンパイラを使用してビルドしています。

@@ -718,7 +718,7 @@ int main(int argc, char *argv[])
 		memset(outputfile[i], 0, PATH_MAX);
 		strncpy(outputfile[i], aacfile, PATH_MAX-8);
 		char *p = strrchr(outputfile[i],'.');
-		sprintf(suffix, " SCE#%d", i);
+		sprintf(suffix, " SCE%d", i);
 		if (p) {
 			memmove(p+strlen(suffix), p, strlen(p));
 			memcpy(p, suffix, strlen(suffix));
