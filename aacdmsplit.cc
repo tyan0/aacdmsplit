@@ -78,8 +78,7 @@ void dualmono_splitter::aacopen(const char *filepath)
 			bool next_frame_valid =
 				remain < frame_length + 2 || is_sync(p + frame_length);
 			if (next_frame_valid && memcmp(tmp, fixed_header_current, 4)) {
-				memcpy(fixed_header_current, p, 4);
-				fixed_header_current[3] &= 0xf0;
+				memcpy(fixed_header_current, tmp, 4);
 				HEADER_CHANGE *h_new =
 					(HEADER_CHANGE *) calloc(1, sizeof(HEADER_CHANGE));
 				if (h_new == NULL)
