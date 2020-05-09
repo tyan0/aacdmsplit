@@ -2,11 +2,6 @@
 #include <string.h>
 #include "aacdmsplit.h"
 
-inline bool is_sync(unsigned char *p)
-{
-	return p[0] == 0xff && (p[1] & 0xf6) == 0xf0;
-}
-
 void dualmono_splitter::aacopen(const char *filepath)
 {
 	unsigned char fixed_header[4] = {0, 0, 0, 0};
@@ -123,7 +118,7 @@ void dualmono_splitter::aacopen(const char *filepath)
 					total_read ++;
 				}
 				if (remain < 4) {
-					printf("Fixed-header which matches with previous frame not found.\n");
+					printf("No fixed header found that matched the previous frame.\n");
 					total_read = orig_pos;
 					p = p0;
 					remain = remain0;

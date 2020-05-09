@@ -55,6 +55,9 @@ private:
 	} bitstream;
 	void errorexit(const char *msg);
 	void aacrelease(void);
+	inline bool is_sync(unsigned char *p) {
+		return p[0] == 0xff && (p[1] & 0xf6) == 0xf0;
+	}
 
 	/* Bit access stuff */
 	void reset_bitstream(void);
