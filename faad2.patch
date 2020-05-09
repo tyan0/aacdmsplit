@@ -35,7 +35,19 @@ diff -u a/libfaad/bits.h b/libfaad/bits.h
 diff -u a/libfaad/decoder.c b/libfaad/decoder.c
 --- a/libfaad/decoder.c	2020-05-01 00:19:45.203086300 +0900
 +++ b/libfaad/decoder.c	2020-05-01 00:21:35.276087400 +0900
-@@ -598,6 +598,15 @@
+@@ -53,9 +53,11 @@
+ uint16_t dbg_count;
+ #endif
+ 
++#if 0
+ #if defined WIN32 || defined _WIN32 || defined WIN64 || defined _WIN64
+ #include "win32_ver.h"
+ #endif
++#endif
+ 
+ /* static function declarations */
+ static void* aac_frame_decode(NeAACDecStruct *hDecoder,
+@@ -596,6 +598,15 @@
  
  static void create_channel_config(NeAACDecStruct *hDecoder, NeAACDecFrameInfo *hInfo)
  {
