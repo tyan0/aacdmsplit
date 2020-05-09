@@ -695,7 +695,7 @@ int dualmono_splitter::section_data(void)
 
 void usage(void)
 {
-	fprintf(stderr, "aacdmsplit <AAC filenamee>\n");
+	fprintf(stderr, "aacdmsplit <AAC filename>\n");
 	exit(1);
 }
 
