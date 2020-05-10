@@ -32,6 +32,9 @@ enum AAC_SYNTAX_ELEMENTS {
 	ID_END = 0x7
 };
 
+#define ZERO_MAX_SFB
+#define NO_MS_MASK
+
 #define CRC_LEN	16
 #define CRC_POLYNOMIAL 0x8005 /* CRC-16 */
 #define CRC_INIT 0xffff
