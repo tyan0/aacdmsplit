@@ -3,6 +3,9 @@ Lossless AAC splitter for dual mono ADTS
 ## What is this?
 デュアルモノAAC ADTSファイルを二つのモノラルAAC ADTSファイルに無劣化(再エンコード無し)で分離するツール。
 
+## Download
+[こちら](https://github.com/tyan0/aacdmsplit/releases)からどうぞ。
+
 ## How to use
 ```aacdmsplit <file name>```
 
@@ -10,7 +13,7 @@ Lossless AAC splitter for dual mono ADTS
 
 ## How to buid
 作者はcygwinのmingwコンパイラを使用してビルドしています。
-ビルドには、同梱のパッチ(faad2.patch)を当てた[libfaad2](https://www.audiocoding.com/faad2.html)が必要です。
+ビルドには、同梱のパッチ(faad2.patch)を当てた[libfaad2](https://www.audiocoding.com/faad2.html) (2.8.8)が必要です。
 別途ダウンロードしてビルドしてください。
 
 ### ビルド手順
