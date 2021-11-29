@@ -13,7 +13,7 @@ aacdmsplit: aacdmsplit.cc aacdmsplit.h
 clean:
 	rm -rf aacdmsplit
 
-aacdmsplit.tar.gz: aacdmsplit.h aacdmsplit.cc faad2.patch Makefile aacdmsplit.exe License README.md
+aacdmsplit.tar.gz: aacdmsplit.h aacdmsplit.cc faad2.patch Makefile aacdmsplit License README.md
 	tar czvf $@ $^
 
 archive: aacdmsplit.tar.gz
