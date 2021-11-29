@@ -1,0 +1,45 @@
+name: "pre-release"
+
+on:
+  push:
+    branches:
+      - "master"
+
+jobs:
+  build:
+    name: "build"
+    runs-on: "windows-2022"
+
+    steps:
+      - name: Set up Cygwin
+        uses: egor-tensin/setup-cygwin@v3
+        with:
+          platform: x64
+          packages: git patch automake pkg-config libtool make mingw64-i686-gcc-g++ tar
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Build
+        run: |
+          cd /cygdrive/d/a/aacdmsplit/aacdmsplit
+          git clone https://github.com/knik0/faad2 --depth 1 --branch 2_8_8 faad2-2.8.8
+          patch -p1 -d faad2-2.8.8 < ./faad2.patch
+          cd faad2-2.8.8
+          autoreconf -i
+          AR=i686-w64-mingw32-ar CC=i686-w64-mingw32-gcc ./configure
+          make -j
+          cd ..
+          make archive
+          ls -lah
+        shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
+
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "master"
+          prerelease: true
+          title: "Development Build"
+          files: |
+            aacdmsplit.tar.gz
+
